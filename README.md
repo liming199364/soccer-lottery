@@ -23,13 +23,13 @@
 
 **Claude Code:**
 ```bash
-git clone --depth 1 https://github.com/your-username/soccer-lottery.git ~/.claude/skills/soccer-lottery
+git clone --depth 1 https://github.com/liming199364/soccer-lottery.git ~/.claude/skills/soccer-lottery
 cd ~/.claude/skills/soccer-lottery && pip install -r requirements.txt
 ```
 
 **OpenClaw:**
 ```bash
-git clone --depth 1 https://github.com/your-username/soccer-lottery.git ~/.openclaw/skills/soccer-lottery
+git clone --depth 1 https://github.com/liming199364/soccer-lottery.git ~/.openclaw/skills/soccer-lottery
 cd ~/.openclaw/skills/soccer-lottery && pip install -r requirements.txt
 ```
 
