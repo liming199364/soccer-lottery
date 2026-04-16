@@ -1,23 +1,23 @@
-# Soccer Lottery (足彩分析助手)
+# 足彩助手 (Soccer Lottery)
 
-足球分析与足彩预测全流程 AI Skill —— 从赛事抓取到综合推荐，一句话搞定。
-兼容 Claude Code 和 OpenClaw 的 skill 格式。安装后输入关键词即可触发完整流程。
+足球分析与足彩预测全流程 AI Skill —— 从赛事抓取到综合推荐报告，一句话搞定。
+兼容 Claude Code 和 OpenClaw 的 skill 格式。安装后说「帮我分析今天的英超」即可触发完整流程。
 
 ## 它能做什么
-说出「帮我分析一下今天的足彩」或「预测一下今晚英超比分」
-  → 赛事抓取 → 球队近况（H2H） → 伤停预测 → 赔率分析 → 综合推荐（胜平负建议）
+"分析今晚的欧冠焦点战"
+  → 赛事筛选 → 深度数据采集（基本面/赔率/伤停） → 数据模型分析（必发/离散度/冷门） → 生成分析报告
 
-核心功能涵盖主流联赛（五大联赛、欧冠等）的数据自动抓取，并提供基于统计模型的赛前分析。
+默认模式下，它会自动抓取今日热门赛事并进行全维度数据扫描；你也可以提供具体对阵或联赛进行深度复盘和预测。
 
 ## 核心能力
 
 | 能力 | 说明 | 实现 |
 | --- | --- | --- |
-| **赛事抓取** | 自动抓取五大联赛、欧冠等主流今日赛事 | `scripts/fetch_matches.py` |
-| **赔率分析** | 主流博彩公司（威廉希尔、立博、Bet365等）初盘与即时盘口分析 | `scripts/odds_analysis.py` |
-| **球队近况** | 历史交锋记录 (H2H)、近期战绩连胜/连败趋势 | `scripts/team_status.py` |
-| **伤停预测** | 核心球员伤病、停赛信息对战局影响评估 | `scripts/injuries.py` |
-| **综合推荐** | 基于多维数据的胜平负概率、比分预测及投注建议 | `toolkit/prediction.py` |
+| **环境与配置** | 自动检查 Python 依赖与 API Key (推荐 Football-Data.org 或 RapidAPI) | `config.yaml` |
+| **赛事筛选** | 抓取今日热门（英超/西甲/欧冠等）或分析用户指定对阵 | `SKILL.md` Step 2 |
+| **深度数据采集** | 基础信息、赔率、近期战绩、H2H、伤停名单等多维度数据采集 | `scripts/fetch_match_data.py` |
+| **数据模型分析** | 必发热度、赔率离散度、进球数预测与冷门探测研判 | `scripts/analyzer.py` |
+| **报告生成** | 输出包含概况、核心研判、数据亮点、推荐方案与风险提示的 Markdown 报告 | `SKILL.md` Step 5 |
 
 ## 安装
 
@@ -25,25 +25,26 @@
 ```bash
 git clone --depth 1 https://github.com/liming199364/soccer-lottery.git ~/.claude/skills/soccer-lottery
 cd ~/.claude/skills/soccer-lottery && pip install -r requirements.txt
+cp config.example.yaml config.yaml # 然后填入你的 API Key
 ```
 
 **OpenClaw:**
 ```bash
 git clone --depth 1 https://github.com/liming199364/soccer-lottery.git ~/.openclaw/skills/soccer-lottery
 cd ~/.openclaw/skills/soccer-lottery && pip install -r requirements.txt
+cp config.example.yaml config.yaml # 然后填入你的 API Key
 ```
 
-## 触发关键词
-- 足彩
-- 赔率
-- 足球分析
-- 比分预测
-- 今日赛事
-- 球队H2H
-- 胜平负建议
+## 配置
+在 `config.yaml` 中配置你的数据源 API Key：
+```yaml
+api:
+  football_data:
+    key: "YOUR_API_KEY_HERE"  # Get from https://www.football-data.org/
+```
 
-## 目录结构
-- `SKILL.md`: Skill 核心指令与流程定义
-- `scripts/`: 数据抓取与分析脚本
-- `toolkit/`: 预测模型与工具库
-- `requirements.txt`: 依赖包列表
+## 辅助功能
+除了全流程分析，你还可以直接进行单项查询：
+- **查赔率**：`python3 scripts/fetch_match_data.py --match <id> --odds-only`
+- **查伤停**：`python3 scripts/fetch_match_data.py --match <id> --injuries-only`
+- **今日红单**：自动汇总高信心值推荐并生成列表。
