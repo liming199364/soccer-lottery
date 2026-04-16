@@ -51,12 +51,14 @@ api:
 5. 将邮箱中收到的 Token 填入 `config.yaml`。
 
 ## 在 Coze 等平台作为自然语言 Skill 使用
-你可以在 Coze.cn / 扣子 等无代码/低代码 AI 平台上，通过自然语言配置这个 Skill：
+你可以直接使用本代码仓库快速注册为自然语言技能，无需自己部署服务器或写代码包装：
 
-1. **新建插件/技能**：在 Coze 中创建一个自定义插件，选择通过代码或 API 接入。
-2. **配置 Prompt / 描述**：直接复制本仓库 `SKILL.md` 中的 `description` 描述和核心提示词（例如："你是一个足球分析与足彩预测助手..."）。
-3. **绑定数据源**：将 `scripts/fetch_match_data.py` 和 `scripts/analyzer.py` 包装为 Python 脚本工具或搭建为一个简单的 FastAPI/Flask 服务供 Coze 调用。
-4. **测试对话**：在调试窗口对机器人说「帮我分析今天的英超」，它将自动触发你配置好的分析流。
+1. **直接导入仓库**：在支持 GitHub 导入的平台（如 Coze 插件、Claude Code 或 OpenClaw）中，直接复制本代码仓库地址 `https://github.com/liming199364/soccer-lottery` 进行安装或导入。
+2. **自然语言配置 Key**：不需要你手动去找代码文件修改，安装完成后，你只需在对话框里直接对 AI 助手说：
+   > 「帮我配置一下 soccer-lottery 技能的 API Key，我的 key 是 xxxxxxxxxx」
+   
+   AI 助手会自动理解你的意图，帮你基于 `config.example.yaml` 创建出 `config.yaml`，并将你的 Key 准确地填入配置文件中。一切都可以通过自然语言对话搞定！
+3. **开始使用**：配置好之后，直接对机器人说「帮我分析今天的英超赛事」，即可触发完整的全自动分析流。
 
 ## 辅助功能
 除了全流程分析，你还可以直接进行单项查询：
