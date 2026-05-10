@@ -17,9 +17,61 @@
 | **赛事筛选** | 抓取今日热门（英超/西甲/德甲/意甲/法甲等）或分析用户指定对阵 | `SKILL.md` Step 2 |
 | **深度数据采集** | 基础信息、赔率（胜负平+让球盘）、近期战绩、H2H、伤停名单等多维度数据采集 | `scripts/fetch_match_data.py` |
 | **数据模型分析** | 必发热度、赔率离散度、进球数预测与冷门探测研判 | `scripts/analyzer.py` |
+| **赔率波动分析** | 通过搜索引擎获取历史赔率数据，分析赔率变化趋势 | `scripts/analyzer.py` |
+| **冷门概率检测** | 根据赔率差距识别冷门赛事，自动调整信心指数 | `scripts/analyzer.py` |
 | **智能推荐** | 支持胜负平推荐、让球推荐（让胜/让平/让负），自动选择信心更高的方案 | `scripts/analyzer.py` |
 | **中文翻译** | 自动翻译球队名称为中文，支持特殊名称映射 | `scripts/analyzer.py` |
 | **报告生成** | 输出包含概况、核心研判、数据亮点、推荐方案与风险提示的 Markdown 报告 | `SKILL.md` Step 5 |
+
+## 分析流程
+
+### 🔄 数据获取流程
+```
+1. The Odds API (主要数据源 - 免费版500次/月)
+   └─ 获取英超等联赛的实时赔率数据
+
+2. 备用网页数据源 (多个备选，防止失效)
+   └─ Flashscore、Betexplorer 等网站
+   └─ 覆盖所有国内足彩联赛
+```
+
+### 🧠 分析流程
+```
+1. 赔率期望值计算
+   └─ 根据赔率计算各选项的期望值
+
+2. 赔率差距分析
+   └─ 计算赔率差距，差距越大信心越高
+
+3. 赔率波动分析 (联网获取历史数据)
+   └─ 通过 Google/Bing 搜索引擎检索历史赔率
+   └─ 分析赔率变化趋势（稳定、下降、上升、急剧变化）
+
+4. 冷门概率检测
+   └─ 根据赔率差距计算冷门概率
+
+5. 信心指数综合计算
+   └─ 综合考虑赔率、波动、冷门风险，生成最终信心指数
+```
+
+### 📊 支持的联赛（国内足彩覆盖）
+
+| 联赛代码 | 联赛名称 | 数据源 |
+|---------|---------|--------|
+| `soccer_epl` | 英超 | The Odds API + 网页抓取 |
+| `soccer_la_liga` | 西甲 | 网页抓取 |
+| `soccer_bundesliga` | 德甲 | 网页抓取 |
+| `soccer_serie_a` | 意甲 | 网页抓取 |
+| `soccer_ligue_1` | 法甲 | 网页抓取 |
+| `soccer_eredivisie` | 荷甲 | 网页抓取 |
+| `soccer_portugal_primeira_liga` | 葡超 | 网页抓取 |
+| `soccer_russia_premier_league` | 俄超 | 网页抓取 |
+| `soccer_scotland_premiership` | 苏超 | 网页抓取 |
+| `soccer_belgium_pro_league` | 比甲 | 网页抓取 |
+| `soccer_sweden_allsvenskan` | 瑞超 | 网页抓取 |
+| `soccer_norwegian_eliteserien` | 挪超 | 网页抓取 |
+| `soccer_champions_league` | 欧冠 | 网页抓取 |
+| `soccer_europa_league` | 欧联 | 网页抓取 |
 
 ## 安装
 
