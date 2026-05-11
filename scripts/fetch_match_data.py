@@ -155,8 +155,11 @@ def scrape_oddsshark(home_team, away_team):
 # ==========================================
 
 def web_search_odds(home_team, away_team):
-    """联网搜索赔率的统一入口 (Orchestrator)"""
-    print(f"[*] 正在尝试联网抓取 {home_team} vs {away_team} 的实时赔率...")
+    """通过多个备选网站联网搜索实时赔率，包含真实的抓取逻辑和速率控制"""
+    if not home_team or not away_team:
+        return {"status": "error", "message": "Missing team names for web search."}
+        
+    print(f"[*] 正在通过联网抓取 {home_team} vs {away_team} 的实时赔率...")
     
     scrapers = [scrape_okooo, scrape_500com, scrape_oddsshark]
     for scraper in scrapers:
@@ -205,18 +208,25 @@ def fetch_data(match_id=None, odds_only=False):
     """主数据获取入口 (CLI Orchestrator)"""
     config = load_config()
     
-    # 1. 列表模式
+    # 1. 列表模式：获取今日所有赛事
     if not match_id:
         raw_matches = fetch_football_data_api("matches", config)
-        if "error" in raw_matches:
-            print(json.dumps(raw_matches, ensure_ascii=False, indent=2))
-            return
-            
-        matches = [{"id": m['id'], "league": m['competition']['name'], 
+        
+        matches = []
+        if "error" not in raw_matches:
+            for m in raw_matches.get('matches', []):
+                matches.append({
+                    "id": m['id'], "league": m['competition']['name'],
                     "home_team": m['homeTeam']['name'], "away_team": m['awayTeam']['name'],
-                    "utcDate": m['utcDate'], "status": m['status']} 
-                   for m in raw_matches.get('matches', [])]
-        print(json.dumps({"date": datetime.now().strftime("%Y-%m-%d"), "matches": matches}, ensure_ascii=False, indent=2))
+                    "utcDate": m['utcDate'], "status": m['status']
+                })
+        
+        # 如果 API 没返回数据或数据较少，提示调用者进行 WebSearch 校验
+        result = {"date": datetime.now().strftime("%Y-%m-%d"), "matches": matches}
+        if not matches:
+            result["warning"] = "API returned no matches. WebSearch VERIFICATION REQUIRED for non-European leagues."
+            
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return
 
     # 2. 详情模式

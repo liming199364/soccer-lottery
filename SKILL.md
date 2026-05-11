@@ -34,6 +34,10 @@ allowed-tools:
 
 ### Step 1: 初始化与对阵抓取
 - **Action**: 立即执行 `python3 {skill_dir}/scripts/fetch_match_data.py`。
+- **Verification (关键强制步骤)**：
+  - 如果 API 返回结果为空，或用户指定了 API 不支持的联赛（如沙特联、日职、中超等）：
+  - **必须**先调用 `WebSearch` 搜索「YYYY-MM-DD + 联赛名称 + schedule/fixtures」进行真实对阵校验。
+  - **严禁**在未通过联网核实的情况下输出任何猜测或模拟的对阵信息。
 - **Output**: 获取今日所有竞足赛事列表。
 
 ### Step 2: 焦点场次筛选
