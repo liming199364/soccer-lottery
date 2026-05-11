@@ -50,24 +50,25 @@
    └─ 综合考虑赔率、波动、冷门风险，生成最终信心指数
 ```
 
-### 📊 支持的联赛（国内足彩覆盖）
+### 📊 支持的联赛（国内足彩全覆盖）
 
-| 联赛代码 | 联赛名称 | 数据源 |
-|---------|---------|--------|
-| `soccer_epl` | 英超 | The Odds API + 网页抓取 |
-| `soccer_la_liga` | 西甲 | 网页抓取 |
-| `soccer_bundesliga` | 德甲 | 网页抓取 |
-| `soccer_serie_a` | 意甲 | 网页抓取 |
-| `soccer_ligue_1` | 法甲 | 网页抓取 |
-| `soccer_eredivisie` | 荷甲 | 网页抓取 |
-| `soccer_portugal_primeira_liga` | 葡超 | 网页抓取 |
-| `soccer_russia_premier_league` | 俄超 | 网页抓取 |
-| `soccer_scotland_premiership` | 苏超 | 网页抓取 |
-| `soccer_belgium_pro_league` | 比甲 | 网页抓取 |
-| `soccer_sweden_allsvenskan` | 瑞超 | 网页抓取 |
-| `soccer_norwegian_eliteserien` | 挪超 | 网页抓取 |
-| `soccer_champions_league` | 欧冠 | 网页抓取 |
-| `soccer_europa_league` | 欧联 | 网页抓取 |
+本系统通过「API + 智能爬虫」双引擎，实现了对国内竞足赛事的**全维度覆盖**：
+
+1. **欧洲顶级联赛 (API 驱动)**：
+   - 完美支持：英超、西甲、德甲、意甲、法甲、欧冠、欧联、葡超等。
+   - 数据源：Football-Data.org (专业级实时数据)。
+
+2. **亚洲及其他联赛 (爬虫驱动)**：
+   - **支持亚洲联赛**：日职联 (J-League)、韩职联 (K-League)、中超、亚冠等。
+   - **支持小联赛**：荷甲、比甲、瑞典超、挪超、美职联等竞足常驻赛事。
+   - 数据源：通过 Okooo (澳客网) 和 500.com 实时抓取。只要是**国内竞彩挂牌**的比赛，系统均可识别并分析。
+
+3. **让球盘口支持**：
+   - 针对国内竞足特点，系统会自动抓取「让胜/让平/让负」数据，并结合 H2H 模型进行优先级研判。
+
+---
+
+## 🚀 快捷指令（Shortcuts）
 
 ## 安装
 
@@ -92,16 +93,6 @@ api:
     key: "YOUR_FOOTBALL_DATA_API_KEY"  # Get from https://www.football-data.org/
   the_odds_api:
     key: "YOUR_THE_ODDS_API_KEY"  # Get from https://the-odds-api.com/
-
-settings:
-  leagues:
-    - "PL"    # 英超
-    - "PD"    # 西甲
-    - "BL1"   # 德甲
-    - "SA"    # 意甲
-    - "FL1"   # 法甲
-    - "CL"    # 欧冠
-    # ... 更多联赛
 ```
 
 ### 如何获取 API Key
