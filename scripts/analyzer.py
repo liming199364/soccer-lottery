@@ -636,6 +636,12 @@ def analyze(match_id):
     # 提取赔率数据用于报告展示
     realtime_odds = raw_data.get('realtime_odds', {})
     
+    # 进球数预测
+    avg_goals = 0
+    if aggregates.get('matches', 0) > 0:
+        avg_goals = aggregates.get('goals', 0) / aggregates.get('matches', 1)
+    goals_prediction = f"Over 2.5 goals ({round(avg_goals, 2)} avg)" if avg_goals > 2.5 else f"Under 2.5 goals ({round(avg_goals, 2)} avg)"
+
     # 决定推荐倾向 (增加让球逻辑判断)
     recommendation = "Draw"
     confidence_val = 0.5
