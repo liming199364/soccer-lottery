@@ -1,41 +1,8 @@
 api:
   football_data:
-    key: "YOUR_FOOTBALL_DATA_API_KEY"  # Get from https://www.football-data.org/
+    key: "YOUR_API_KEY_HERE"  # Get from https://www.football-data.org/
   the_odds_api:
-    key: "YOUR_THE_ODDS_API_KEY"  # Get from https://the-odds-api.com/
+    key: "YOUR_THE_ODDS_API_KEY_HERE" # Get from https://the-odds-api.com/
 
 settings:
-  leagues:
-    # 欧洲五大联赛
-    - "PL"    # 英超
-    - "PD"    # 西甲
-    - "BL1"   # 德甲
-    - "SA"    # 意甲
-    - "FL1"   # 法甲
-    
-    # 欧洲其他联赛
-    - "ELC"   # 英冠
-    - "SC"    # 苏超
-    - "DED"   # 荷甲
-    - "PPL"   # 葡超
-    - "BEL"   # 比甲
-    - "AUT"   # 奥甲
-    - "FNL"   # 芬超
-    - "NPL"   # 挪超
-    - "SLL"   # 瑞超
-    
-    # 欧洲赛事
-    - "CL"    # 欧冠
-    - "EL"    # 欧联杯
-    - "EC"    # 欧洲国家联赛
-    
-    # 美洲联赛
-    - "BSA"   # 巴甲
-    - "ASA"   # 阿甲
-    - "MLS"   # 美职联
-    
-    # 亚洲联赛
-    - "CPL"   # 中超
-    - "J1"    # 日职联
-    - "K1"    # 韩K联
-    - "AUS"   # 澳超
+  default_confidence_threshold: 0.7

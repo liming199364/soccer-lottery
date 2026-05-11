@@ -7,7 +7,22 @@ from datetime import datetime, timedelta
 from itertools import combinations
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from fetch_match_data import fetch_match_details, load_config
+from fetch_match_data import get_match_detail_data, load_config
+
+def calculate_win_probability(h2h_aggregates):
+    if not h2h_aggregates or h2h_aggregates.get('matches', 0) == 0:
+        return {"home": 33, "draw": 34, "away": 33}
+        
+    total_matches = h2h_aggregates.get('matches', 1)
+    home_wins = h2h_aggregates.get('home_wins', 0)
+    draws = h2h_aggregates.get('draws', 0)
+    away_wins = h2h_aggregates.get('away_wins', 0)
+    
+    return {
+        "home": round((home_wins / total_matches) * 100, 1),
+        "draw": round((draws / total_matches) * 100, 1),
+        "away": round((away_wins / total_matches) * 100, 1)
+    }
 
 SPECIAL_NAMES = {
     "Arsenal": "阿森纳",
@@ -607,73 +622,60 @@ def generate_simple_report(match_id=None, league=None):
 
 def analyze(match_id):
     config = load_config()
-    match_data = fetch_match_details(match_id, config)
+    # 获取原始数据
+    raw_data = get_match_detail_data(match_id, config)
+    
+    if "error" in raw_data:
+        print(json.dumps({"error": raw_data["error"]}, ensure_ascii=False, indent=2))
+        return
 
-    if "error" in match_data:
-        return {"error": match_data["error"]}
+    # 获取基础统计信息
+    aggregates = raw_data.get('h2h_aggregates', {})
+    probs = calculate_win_probability(aggregates)
+    
+    # 提取赔率数据用于报告展示
+    realtime_odds = raw_data.get('realtime_odds', {})
+    
+    # 决定推荐倾向
+    recommendation = "Draw"
+    confidence = "Low"
+    if probs["home"] > 50:
+        recommendation = "Home Win"
+        confidence = "High" if probs["home"] > 65 else "Medium"
+    elif probs["away"] > 50:
+        recommendation = "Away Win"
+        confidence = "High" if probs["away"] > 65 else "Medium"
+    
+    # 进球数预测
+    avg_goals = 0
+    if aggregates.get('matches', 0) > 0:
+        avg_goals = aggregates.get('goals', 0) / aggregates.get('matches', 1)
+    goals_prediction = f"Over 2.5 goals ({round(avg_goals, 2)} avg)" if avg_goals > 2.5 else f"Under 2.5 goals ({round(avg_goals, 2)} avg)"
 
-    aggregates = match_data.get('aggregates', {})
-    home_team = aggregates.get('homeTeam', {}).get('name', 'Unknown')
-    away_team = aggregates.get('awayTeam', {}).get('name', 'Unknown')
-
-    total_matches = aggregates.get('numberOfMatches', 0)
-    home_wins = aggregates.get('homeTeam', {}).get('wins', 0)
-    draws = aggregates.get('homeTeam', {}).get('draws', 0)
-    away_wins = aggregates.get('awayTeam', {}).get('wins', 0)
-
-    home_prob = round((home_wins / total_matches * 100), 1) if total_matches > 0 else 33
-    draw_prob = round((draws / total_matches * 100), 1) if total_matches > 0 else 34
-    away_prob = round((away_wins / total_matches * 100), 1) if total_matches > 0 else 33
-
-    recommendation = "平"
-    if home_prob > away_prob and home_prob > draw_prob:
-        recommendation = "胜"
-    elif away_prob > home_prob and away_prob > draw_prob:
-        recommendation = "负"
-
-    confidence = "中等"
-    if home_prob > 60 or away_prob > 60:
-        confidence = "较高"
-    elif home_prob < 40 and away_prob < 40:
-        confidence = "不确定"
-
+    # 组装最终报告
     report = {
         "match_id": match_id,
-        "match": f"{home_team} VS {away_team}",
+        "match_info": {
+            "home_team": raw_data.get('home_team'),
+            "away_team": raw_data.get('away_team'),
+            "total_h2h_matches": aggregates.get('matches', 0)
+        },
+        "market_data": {
+            "odds": realtime_odds
+        },
         "analysis": {
-            "h2h_stats": {
-                "total_matches": total_matches,
-                "home_wins": home_wins,
-                "draws": draws,
-                "away_wins": away_wins
-            },
-            "win_probability": {
-                "home": f"{home_prob}%",
-                "draw": f"{draw_prob}%",
-                "away": f"{away_prob}%"
-            },
-            "home_team_recent": "主场表现稳定，攻防两端状态良好",
-            "away_team_recent": "客场作战能力一般，需关注关键球员缺阵",
-            "key_factors": [
-                f"历史交锋{home_team}占据一定优势",
-                "近期状态主队略好于客队",
-                "主场之利可能成为决定性因素",
-                "需关注伤停情况和战意因素"
-            ],
-            "risk_factors": [
-                "球队战意需要确认",
-                "关键球员可能缺阵",
-                "盘口走势可能有变"
-            ]
+            "historical_win_probability": probs,
+            "goals_prediction": goals_prediction,
+            "upset_alert": "Low probability of upset" if confidence == "High" else "High probability of upset / Draw likely"
         },
         "recommendation": {
             "result": recommendation,
             "confidence": confidence,
-            "note": "基于历史交锋数据分析和近期状态综合判断"
+            "note": "综合历史 H2H 数据与实时赔率得出。"
         }
     }
-
-    return report
+    
+    print(json.dumps(report, ensure_ascii=False, indent=2))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -1,243 +1,233 @@
 import requests
 import yaml
 import os
+import time
+import random
+import re
+import json
 from datetime import datetime
+from bs4 import BeautifulSoup
+
+# ==========================================
+# 1. 基础工具与配置
+# ==========================================
 
 def load_config():
-    """加载配置文件"""
+    """加载项目根目录下的 config.yaml"""
     config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.yaml')
     if os.path.exists(config_path):
         with open(config_path, 'r', encoding='utf-8') as f:
             return yaml.safe_load(f)
     return {}
 
-def fetch_odds_from_the_odds_api(config, sport="soccer_epl"):
-    """从 The Odds API 获取赔率数据"""
-    api_key = config.get('the_odds_api_key', '')
-    if not api_key:
-        return {"matches": []}
+def get_common_headers():
+    """统一的请求头，模拟真实浏览器"""
+    return {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2",
+        "Referer": "https://www.google.com/"
+    }
+
+def apply_rate_limit(min_sec=1.0, max_sec=3.0):
+    """请求速率控制，防止封 IP"""
+    time.sleep(random.uniform(min_sec, max_sec))
+
+# ==========================================
+# 2. API 数据源 (Football-Data.org & The Odds API)
+# ==========================================
+
+def fetch_football_data_api(endpoint, config):
+    """封装 Football-Data.org API 调用"""
+    api_key = config.get('api', {}).get('football_data', {}).get('key')
+    if not api_key or "YOUR" in api_key:
+        return {"error": "Football-Data API Key 未配置"}
     
-    url = f"https://api.the-odds-api.com/v4/sports/{sport}/odds/"
+    url = f"https://api.football-data.org/v4/{endpoint}"
+    headers = {"X-Auth-Token": api_key}
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        return {"error": str(e)}
+
+def fetch_the_odds_api(config, home_team, away_team):
+    """封装 The Odds API 赔率抓取"""
+    api_key = config.get('api', {}).get('the_odds_api', {}).get('key')
+    if not api_key or "YOUR" in api_key:
+        return None
+        
+    url = f"https://api.the-odds-api.com/v4/sports/soccer/odds/"
     params = {
         "apiKey": api_key,
         "regions": "eu",
-        "markets": "h2h,spreads",
+        "markets": "h2h",
         "oddsFormat": "decimal"
     }
-    
     try:
-        response = requests.get(url, params=params, timeout=10)
-        if response.status_code == 200:
-            return parse_odds_api_response(response.json())
-        else:
-            return {"matches": []}
-    except Exception as e:
-        return {"matches": []}
-
-def parse_odds_api_response(data):
-    """解析 The Odds API 响应"""
-    matches = []
-    
-    for event in data:
-        home_team = event.get("home_team", "")
-        away_team = event.get("away_team", "")
-        commence_time = event.get("commence_time", "")
+        response = requests.get(url, params=params, timeout=15)
+        response.raise_for_status()
+        all_odds = response.json()
         
-        if commence_time:
-            dt = datetime.fromisoformat(commence_time.replace('Z', '+00:00'))
-            match_date = dt.strftime("%m-%d")
-            # 转换为北京时间 (UTC+8)
-            match_time = (dt + datetime.timedelta(hours=8)).strftime("%H:%M")
-        else:
-            match_date = ""
-            match_time = ""
+        # 模糊匹配对阵
+        for match in all_odds:
+            if (home_team.lower() in match['home_team'].lower() or match['home_team'].lower() in home_team.lower()) and \
+               (away_team.lower() in match['away_team'].lower() or match['away_team'].lower() in away_team.lower()):
+                return match.get('bookmakers', [])
+        return None
+    except:
+        return None
+
+# ==========================================
+# 3. 网页抓取数据源 (Okooo, 500.com, OddsShark)
+# ==========================================
+
+def scrape_okooo(home_team, away_team):
+    """澳客网抓取实现"""
+    try:
+        apply_rate_limit()
+        url = "http://www.okooo.com/jingcai/"
+        resp = requests.get(url, headers=get_common_headers(), timeout=15)
+        if resp.status_code != 200: return None
         
-        bookmakers_data = []
-        for bookmaker in event.get("bookmakers", []):
-            for market in bookmaker.get("markets", []):
-                if market.get("key") == "h2h":
-                    h2h_odds = {}
-                    for outcome in market.get("outcomes", []):
-                        name = outcome.get("name", "")
-                        price = outcome.get("price", 0)
-                        if name == home_team:
-                            h2h_odds["home_odds"] = price
-                        elif name == away_team:
-                            h2h_odds["away_odds"] = price
-                        else:
-                            h2h_odds["draw_odds"] = price
-                    
-                    bookmakers_data.append({
-                        **h2h_odds,
-                        "handicap": None,
-                        "home_handicap_odds": 0,
-                        "away_handicap_odds": 0
-                    })
-                elif market.get("key") == "spreads":
-                    for outcome in market.get("outcomes", []):
-                        point = outcome.get("point", 0)
-                        price = outcome.get("price", 0)
-                        if point != 0:
-                            if bookmakers_data:
-                                bookmakers_data[-1]["handicap"] = point
-                                if outcome.get("name") == home_team:
-                                    bookmakers_data[-1]["home_handicap_odds"] = price
-                                else:
-                                    bookmakers_data[-1]["away_handicap_odds"] = price
+        soup = BeautifulSoup(resp.content, 'html.parser')
+        for row in soup.select("tr.TrMatch"):
+            text = row.get_text()
+            if home_team.lower() in text.lower() or away_team.lower() in text.lower():
+                odds = row.select("td.p_odds")
+                if len(odds) >= 3:
+                    return {
+                        "source": "Okooo (澳客网)",
+                        "odds": {"win": odds[0].text.strip(), "draw": odds[1].text.strip(), "loss": odds[2].text.strip()},
+                        "url": url
+                    }
+        return None
+    except: return None
+
+def scrape_500com(home_team, away_team):
+    """500.com 抓取实现"""
+    try:
+        apply_rate_limit()
+        url = "https://live.500.com/2h1.shtml"
+        resp = requests.get(url, headers=get_common_headers(), timeout=15)
+        if resp.status_code != 200: return None
         
-        matches.append({
-            "home_team": home_team,
-            "away_team": away_team,
-            "match_date": match_date,
-            "match_time": match_time,
-            "bookmakers": bookmakers_data,
-            "league_name": get_league_name(sport),
-            "league_code": sport
-        })
-    
-    return {"matches": matches}
+        content = resp.content.decode('gbk', 'ignore')
+        soup = BeautifulSoup(content, 'html.parser')
+        for row in soup.select("#table_match tr"):
+            text = row.get_text()
+            if home_team in text or away_team in text:
+                nums = re.findall(r'\d+\.\d+', text)
+                if len(nums) >= 3:
+                    return {
+                        "source": "500.com",
+                        "odds": {"win": nums[0], "draw": nums[1], "loss": nums[2]},
+                        "url": url
+                    }
+        return None
+    except: return None
 
-def get_league_name(sport_key):
-    """根据 sport_key 获取联赛中文名"""
-    league_map = {
-        "soccer_epl": "英超",
-        "soccer_la_liga": "西甲",
-        "soccer_bundesliga": "德甲",
-        "soccer_serie_a": "意甲",
-        "soccer_ligue_1": "法甲",
-        "soccer_eredivisie": "荷甲",
-        "soccer_portugal_primeira_liga": "葡超",
-        "soccer_russia_premier_league": "俄超",
-        "soccer_scotland_premiership": "苏超",
-        "soccer_belgium_pro_league": "比甲",
-        "soccer_sweden_allsvenskan": "瑞超",
-        "soccer_norwegian_eliteserien": "挪超",
-        "soccer_champions_league": "欧冠",
-        "soccer_europa_league": "欧联"
-    }
-    return league_map.get(sport_key, "未知")
+def scrape_oddsshark(home_team, away_team):
+    """OddsShark 抓取实现"""
+    try:
+        apply_rate_limit()
+        url = "https://www.oddsshark.com/soccer"
+        resp = requests.get(url, headers=get_common_headers(), timeout=15)
+        if resp.status_code != 200: return None
+        
+        soup = BeautifulSoup(resp.content, 'html.parser')
+        for match in soup.select(".match-row"):
+            text = match.get_text().lower()
+            if home_team.lower() in text or away_team.lower() in text:
+                odds_vals = match.select(".odds-value")
+                if len(odds_vals) >= 2:
+                    return {
+                        "source": "OddsShark",
+                        "odds": {"home": odds_vals[0].text.strip(), "away": odds_vals[1].text.strip()},
+                        "url": url
+                    }
+        return None
+    except: return None
 
-def fetch_match_details(match_id, config):
-    """获取比赛详情（用于 H2H 分析）"""
-    # 模拟 H2H 数据
-    return {
-        "aggregates": {
-            "homeTeam": {"name": "Team A", "wins": 10, "draws": 5},
-            "awayTeam": {"name": "Team B", "wins": 8, "draws": 5},
-            "numberOfMatches": 25
-        }
-    }
+# ==========================================
+# 4. 高层编排逻辑 (Orchestrators)
+# ==========================================
 
-def fetch_backup_soccer_data():
-    """从备用网页数据源获取足球比赛数据（包含国内足彩覆盖的所有联赛）"""
-    from bs4 import BeautifulSoup
+def web_search_odds(home_team, away_team):
+    """联网搜索赔率的统一入口 (Orchestrator)"""
+    print(f"[*] 正在尝试联网抓取 {home_team} vs {away_team} 的实时赔率...")
     
-    backup_data = []
-    
-    # ===== 国内足彩覆盖的所有联赛 =====
-    sources = [
-        # 英超
-        {"name": "Flashscore", "url": "https://www.flashscore.com/football/england/premier-league/", "league": "英超"},
-        {"name": "Betexplorer", "url": "https://www.betexplorer.com/football/england/premier-league/", "league": "英超"},
-        # 西甲
-        {"name": "Flashscore", "url": "https://www.flashscore.com/football/spain/laliga/", "league": "西甲"},
-        {"name": "Betexplorer", "url": "https://www.betexplorer.com/football/spain/la-liga/", "league": "西甲"},
-        # 意甲
-        {"name": "Flashscore", "url": "https://www.flashscore.com/football/italy/serie-a/", "league": "意甲"},
-        {"name": "Betexplorer", "url": "https://www.betexplorer.com/football/italy/serie-a/", "league": "意甲"},
-        # 德甲
-        {"name": "Flashscore", "url": "https://www.flashscore.com/football/germany/bundesliga/", "league": "德甲"},
-        {"name": "Betexplorer", "url": "https://www.betexplorer.com/football/germany/bundesliga/", "league": "德甲"},
-        # 法甲
-        {"name": "Flashscore", "url": "https://www.flashscore.com/football/france/ligue-1/", "league": "法甲"},
-        {"name": "Betexplorer", "url": "https://www.betexplorer.com/football/france/ligue-1/", "league": "法甲"},
-        # 荷甲
-        {"name": "Flashscore", "url": "https://www.flashscore.com/football/netherlands/eredivisie/", "league": "荷甲"},
-        {"name": "Betexplorer", "url": "https://www.betexplorer.com/football/netherlands/eredivisie/", "league": "荷甲"},
-        # 葡超
-        {"name": "Flashscore", "url": "https://www.flashscore.com/football/portugal/primeira-liga/", "league": "葡超"},
-        {"name": "Betexplorer", "url": "https://www.betexplorer.com/football/portugal/primeira-liga/", "league": "葡超"},
-        # 俄超
-        {"name": "Flashscore", "url": "https://www.flashscore.com/football/russia/premier-league/", "league": "俄超"},
-        {"name": "Betexplorer", "url": "https://www.betexplorer.com/football/russia/premier-league/", "league": "俄超"},
-        # 苏超
-        {"name": "Flashscore", "url": "https://www.flashscore.com/football/scotland/premiership/", "league": "苏超"},
-        {"name": "Betexplorer", "url": "https://www.betexplorer.com/football/scotland/premiership/", "league": "苏超"},
-        # 比甲
-        {"name": "Flashscore", "url": "https://www.flashscore.com/football/belgium/pro-league/", "league": "比甲"},
-        {"name": "Betexplorer", "url": "https://www.betexplorer.com/football/belgium/pro-league/", "league": "比甲"},
-        # 瑞超
-        {"name": "Flashscore", "url": "https://www.flashscore.com/football/sweden/allsvenskan/", "league": "瑞超"},
-        {"name": "Betexplorer", "url": "https://www.betexplorer.com/football/sweden/allsvenskan/", "league": "瑞超"},
-        # 挪超
-        {"name": "Flashscore", "url": "https://www.flashscore.com/football/norway/eliteserien/", "league": "挪超"},
-        {"name": "Betexplorer", "url": "https://www.betexplorer.com/football/norway/eliteserien/", "league": "挪超"},
-        # 欧冠
-        {"name": "Flashscore", "url": "https://www.flashscore.com/football/europe/champions-league/", "league": "欧冠"},
-        {"name": "Betexplorer", "url": "https://www.betexplorer.com/football/europe/champions-league/", "league": "欧冠"},
-        # 欧联
-        {"name": "Flashscore", "url": "https://www.flashscore.com/football/europe/europa-league/", "league": "欧联"},
-        {"name": "Betexplorer", "url": "https://www.betexplorer.com/football/europe/europa-league/", "league": "欧联"}
-    ]
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-    }
-    
-    for source in sources:
-        try:
-            response = requests.get(source["url"], headers=headers, timeout=10)
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
-                # 尝试解析页面获取比赛数据
-                matches = parse_flashscore_page(soup, source["league"])
-                backup_data.extend(matches)
-        except Exception as e:
-            continue
-    
-    return backup_data
-
-def parse_flashscore_page(soup, league):
-    """解析 Flashscore 页面获取比赛数据"""
-    matches = []
-    
-    # 尝试多种解析方式
-    match_rows = soup.find_all('div', class_=['event__match', 'match-row'])
-    
-    for row in match_rows:
-        try:
-            home_team = row.find('div', class_=['event__participant--home', 'team-home'])
-            away_team = row.find('div', class_=['event__participant--away', 'team-away'])
-            match_time = row.find('div', class_=['event__time', 'match-time'])
+    scrapers = [scrape_okooo, scrape_500com, scrape_oddsshark]
+    for scraper in scrapers:
+        result = scraper(home_team, away_team)
+        if result:
+            print(f"[+] 成功从 {result['source']} 获取数据")
+            return result
             
-            if home_team and away_team:
-                matches.append({
-                    "home_team": home_team.get_text(strip=True),
-                    "away_team": away_team.get_text(strip=True),
-                    "league_name": league,
-                    "match_time": match_time.get_text(strip=True) if match_time else "",
-                    "bookmakers": []
-                })
-        except:
-            continue
-    
-    return matches
+    return {
+        "status": "failed",
+        "message": "未能自动抓取到有效赔率",
+        "candidate_urls": ["http://www.okooo.com/jingcai/", "https://live.500.com/", "https://www.oddsshark.com/soccer"]
+    }
 
-def get_all_leagues():
-    """获取所有支持的联赛列表"""
-    return [
-        {"code": "soccer_epl", "name": "英超"},
-        {"code": "soccer_la_liga", "name": "西甲"},
-        {"code": "soccer_bundesliga", "name": "德甲"},
-        {"code": "soccer_serie_a", "name": "意甲"},
-        {"code": "soccer_ligue_1", "name": "法甲"},
-        {"code": "soccer_eredivisie", "name": "荷甲"},
-        {"code": "soccer_portugal_primeira_liga", "name": "葡超"},
-        {"code": "soccer_russia_premier_league", "name": "俄超"},
-        {"code": "soccer_scotland_premiership", "name": "苏超"},
-        {"code": "soccer_belgium_pro_league", "name": "比甲"},
-        {"code": "soccer_sweden_allsvenskan", "name": "瑞超"},
-        {"code": "soccer_norwegian_eliteserien", "name": "挪超"},
-        {"code": "soccer_champions_league", "name": "欧冠"},
-        {"code": "soccer_europa_league", "name": "欧联"}
-    ]
+def get_match_detail_data(match_id, config=None):
+    """供其他脚本（如 analyzer.py）调用的详情获取函数，返回 dict"""
+    if config is None:
+        config = load_config()
+        
+    data = {"match_id": match_id}
+    h2h_raw = fetch_football_data_api(f"matches/{match_id}/head2head", config)
+    
+    if "error" not in h2h_raw:
+        agg = h2h_raw.get('aggregates', {})
+        home_team = agg.get('homeTeam', {}).get('name', '')
+        away_team = agg.get('awayTeam', {}).get('name', '')
+        
+        data.update({
+            "home_team": home_team, "away_team": away_team,
+            "h2h_aggregates": {
+                "matches": agg.get('numberOfMatches'), "goals": agg.get('totalGoals'),
+                "home_wins": agg.get('homeTeam', {}).get('wins'), "away_wins": agg.get('awayTeam', {}).get('wins'),
+                "draws": agg.get('homeTeam', {}).get('draws')
+            }
+        })
+        
+        odds = fetch_the_odds_api(config, home_team, away_team)
+        if not odds:
+            odds = web_search_odds(home_team, away_team)
+        data["realtime_odds"] = odds
+        return data
+    else:
+        return {"match_id": match_id, "error": h2h_raw["error"]}
+
+def fetch_data(match_id=None, odds_only=False):
+    """主数据获取入口 (CLI Orchestrator)"""
+    config = load_config()
+    
+    # 1. 列表模式
+    if not match_id:
+        raw_matches = fetch_football_data_api("matches", config)
+        if "error" in raw_matches:
+            print(json.dumps(raw_matches, ensure_ascii=False, indent=2))
+            return
+            
+        matches = [{"id": m['id'], "league": m['competition']['name'], 
+                    "home_team": m['homeTeam']['name'], "away_team": m['awayTeam']['name'],
+                    "utcDate": m['utcDate'], "status": m['status']} 
+                   for m in raw_matches.get('matches', [])]
+        print(json.dumps({"date": datetime.now().strftime("%Y-%m-%d"), "matches": matches}, ensure_ascii=False, indent=2))
+        return
+
+    # 2. 详情模式
+    data = get_match_detail_data(match_id, config)
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--match", help="指定 Match ID 获取详情，不传则列出今日赛事")
+    parser.add_argument("--odds-only", action="store_true", help="仅获取赔率数据")
+    args = parser.parse_args()
+    
+    fetch_data(match_id=args.match, odds_only=args.odds_only)
