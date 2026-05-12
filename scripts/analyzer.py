@@ -634,22 +634,23 @@ def analyze(match_id, injury_info=None, trend_info=None):
     realtime_odds = raw_data.get('realtime_odds', {})
     hot_level = raw_data.get('intelligence', {}).get('hot_level', 'Medium')
     
-    # 2. 信心权重分配 (40% H2H + 30% 赔率走势 + 30% 伤病情报)
+    # 2. 信心权重分配 (50% 赔率走势 + 30% 实时情报 + 20% H2H)
     base_confidence = max(h2h_probs.values()) / 100
     
-    # 赔率走势修正 (30%)
+    # 赔率走势修正 (50%) - 最高权重
     trend_score = 0.5 # 默认中性
     if trend_info:
-        if "down" in trend_info.lower() or "降" in trend_info: trend_score = 0.8
-        elif "up" in trend_info.lower() or "升" in trend_info: trend_score = 0.2
+        if "down" in trend_info.lower() or "降" in trend_info: trend_score = 0.9
+        elif "up" in trend_info.lower() or "升" in trend_info: trend_score = 0.1
         
-    # 伤病情报修正 (30%)
+    # 伤病情报修正 (30%) - 权重高于历史数据
     injury_score = 0.5 # 默认中性
     if injury_info:
-        if "missing core" in injury_info.lower() or "核心缺阵" in injury_info: injury_score = 0.2
-        elif "full squad" in injury_info.lower() or "全主力" in injury_info: injury_score = 0.8
+        if "missing core" in injury_info.lower() or "核心缺阵" in injury_info: injury_score = 0.1
+        elif "full squad" in injury_info.lower() or "全主力" in injury_info: injury_score = 0.9
 
-    final_confidence_val = (base_confidence * 0.4) + (trend_score * 0.3) + (injury_score * 0.3)
+    # 全新加权计算逻辑
+    final_confidence_val = (trend_score * 0.5) + (injury_score * 0.3) + (base_confidence * 0.2)
     
     # 3. 热门场次降级处理
     if hot_level == "High":
