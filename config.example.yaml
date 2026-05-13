@@ -1,8 +1,6 @@
 api:
   football_data:
     key: "YOUR_API_KEY_HERE"  # Get from https://www.football-data.org/
-  the_odds_api:
-    key: "YOUR_THE_ODDS_API_KEY_HERE" # Get from https://the-odds-api.com/
 
 settings:
   default_confidence_threshold: 0.7

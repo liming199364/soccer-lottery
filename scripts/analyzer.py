@@ -71,7 +71,7 @@ def translate_team_name(name):
                 translation = result[0][0][0]
                 CACHE[name] = translation
                 return translation
-    except Exception as e:
+    except Exception:
         pass
     
     CACHE[name] = name
@@ -141,146 +141,16 @@ def calculate_handicap_confidence(home_handicap_odds, away_handicap_odds):
     
     return min(95, max(60, confidence))
 
-# ========== 赔率波动分析功能 ==========
-
-def fetch_historical_odds(home_team, away_team):
-    """尝试通过搜索引擎获取历史赔率数据"""
-    import requests
-    from bs4 import BeautifulSoup
-    
-    search_queries = [
-        f"{home_team} vs {away_team} historical odds",
-        f"{home_team} {away_team} betting odds history",
-        f"{home_team} {away_team} 历史赔率"
-    ]
-    
-    # Google 搜索
-    for query in search_queries:
-        try:
-            url = f"https://www.google.com/search?q={requests.utils.quote(query)}"
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-            }
-            response = requests.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
-                # 尝试从搜索结果中提取赔率信息
-                result_divs = soup.find_all('div', class_='g')
-                if result_divs:
-                    return {
-                        "success": True,
-                        "source": "Google Search",
-                        "historical_data": generate_simulated_history()
-                    }
-        except:
-            continue
-    
-    # Bing 搜索
-    for query in search_queries:
-        try:
-            url = f"https://www.bing.com/search?q={requests.utils.quote(query)}"
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-            }
-            response = requests.get(url, headers=headers, timeout=10)
-            if response.status_code == 200:
-                soup = BeautifulSoup(response.text, 'html.parser')
-                result_divs = soup.find_all('li', class_='b_algo')
-                if result_divs:
-                    return {
-                        "success": True,
-                        "source": "Bing Search",
-                        "historical_data": generate_simulated_history()
-                    }
-        except:
-            continue
-    
-    return {
-        "success": False,
-        "message": "无法获取历史赔率数据"
-    }
-
-def generate_simulated_history():
-    """生成模拟历史赔率数据用于演示"""
-    import random
-    base_odds = {
-        "主胜": random.uniform(1.5, 5.0),
-        "平局": random.uniform(2.5, 4.5),
-        "客胜": random.uniform(1.5, 5.0)
-    }
-    
-    history = []
-    for i in range(5):
-        variation = random.uniform(-0.15, 0.15)
-        history.append({
-            "timestamp": (datetime.now() - timedelta(hours=i*2)).isoformat(),
-            "odds": {
-                "主胜": round(base_odds["主胜"] * (1 + variation * random.uniform(0.5, 1.5)), 2),
-                "平局": round(base_odds["平局"] * (1 + variation * random.uniform(0.5, 1.5)), 2),
-                "客胜": round(base_odds["客胜"] * (1 + variation * random.uniform(0.5, 1.5)), 2)
-            }
-        })
-    
-    return history
-
-def analyze_odds_movement(home_team, away_team, current_odds):
-    """分析赔率波动情况 - 仅使用联网数据"""
-    # 尝试从网络获取历史数据
-    historical_data = fetch_historical_odds(home_team, away_team)
-    
-    # 如果获取不到历史数据，直接返回没有历史数据的结果
-    if not historical_data["success"] or "historical_data" not in historical_data:
-        return {
-            "has_history": False,
-            "movement": None,
-            "movement_percent": 0,
-            "trend": "stable",
-            "source": "none"
-        }
-    
-    # 使用联网获取的历史数据
-    recent_history = historical_data["historical_data"]
-    
-    latest_odds = recent_history[-1]["odds"]
-    movement = {}
-    trend = "stable"
-    
-    for outcome in ["主胜", "平局", "客胜"]:
-        if outcome in current_odds and outcome in latest_odds:
-            old_odds = latest_odds[outcome]
-            new_odds = current_odds[outcome]
-            if old_odds > 0 and new_odds > 0:
-                change = ((new_odds - old_odds) / old_odds) * 100
-                movement[outcome] = round(change, 2)
-                
-                if change < -5:
-                    trend = "sharp" if change < -10 else "down"
-                elif change > 5:
-                    trend = "drift" if change > 10 else "up"
-    
-    return {
-        "has_history": True,
-        "movement": movement,
-        "movement_percent": movement.get("客胜", 0),
-        "trend": trend,
-        "source": historical_data["source"]
-    }
-
-def adjust_confidence_by_movement(confidence, movement_analysis, recommendation):
-    """根据赔率波动调整信心指数"""
-    if not movement_analysis["has_history"]:
+def adjust_confidence_by_movement(confidence, trend):
+    """根据赔率走势方向调整信心（由 Agent 在调用时传入走势描述）"""
+    if not trend:
         return confidence
     
-    trend = movement_analysis["trend"]
-    movement = movement_analysis["movement"]
-    
-    if movement and recommendation in movement:
-        change = movement[recommendation]
-        
-        if change < -5:
-            confidence += min(10, abs(change) // 2)
-        elif change > 5:
-            confidence -= min(10, change // 2)
+    trend_lower = trend.lower()
+    if "down" in trend_lower or "降" in trend_lower or "走低" in trend_lower:
+        confidence += 5
+    elif "up" in trend_lower or "升" in trend_lower or "走高" in trend_lower:
+        confidence -= 5
     
     return min(95, max(60, confidence))
 
@@ -315,7 +185,6 @@ def adjust_for_upset_risk(confidence, home_odds, draw_odds, away_odds, recommend
     """根据冷门风险调整信心指数"""
     upset_prob = detect_upset_probability(home_odds, draw_odds, away_odds)
     
-    # 如果推荐的是热门选项，降低信心
     min_odds = min(home_odds, draw_odds, away_odds)
     is_favorite = False
     
@@ -328,8 +197,6 @@ def adjust_for_upset_risk(confidence, home_odds, draw_odds, away_odds, recommend
         confidence -= min(upset_prob // 5, 15)
     
     return min(95, max(50, confidence))
-
-# ========== 赔率波动分析功能结束 ==========
 
 def generate_parlay_combinations(recommendations, max_parlay=3):
     parlays = {
@@ -378,13 +245,11 @@ def generate_simple_report(match_id=None, league=None):
         "投注分布": {}
     }
 
-    # 修正时间过滤逻辑：只选取当前时间之后且在未来24小时内的比赛
     now = datetime.now()
     cutoff = now + timedelta(hours=24)
     
     print(f"[!] 正在筛选从 {now.strftime('%m-%d %H:%M')} 到 {cutoff.strftime('%m-%d %H:%M')} 之间的赛事...")
     
-    # ... (原有逻辑中由于 generate_simple_report 是占位，我们在 analyze 函数中也应体现此逻辑)
     return report
 
 def analyze(match_id, injury_info=None, trend_info=None):
@@ -398,19 +263,18 @@ def analyze(match_id, injury_info=None, trend_info=None):
     # 1. 基础数据
     aggregates = raw_data.get('h2h_aggregates', {})
     h2h_probs = calculate_win_probability(aggregates)
-    realtime_odds = raw_data.get('realtime_odds', {})
     hot_level = raw_data.get('intelligence', {}).get('hot_level', 'Medium')
     
     # 2. 信心权重分配 (50% 赔率走势 + 30% 实时情报 + 20% H2H)
     base_confidence = max(h2h_probs.values()) / 100
     
-    # 赔率走势修正 (50%) - 最高权重
+    # 赔率走势修正 (50%) - 最高权重（由 Agent 传入）
     trend_score = 0.5 # 默认中性
     if trend_info:
         if "down" in trend_info.lower() or "降" in trend_info: trend_score = 0.9
         elif "up" in trend_info.lower() or "升" in trend_info: trend_score = 0.1
         
-    # 伤病情报修正 (30%) - 权重高于历史数据
+    # 伤病情报修正 (30%) - 权重高于历史数据（由 Agent 传入）
     injury_score = 0.5 # 默认中性
     if injury_info:
         if "missing core" in injury_info.lower() or "核心缺阵" in injury_info: injury_score = 0.1
@@ -421,48 +285,31 @@ def analyze(match_id, injury_info=None, trend_info=None):
     
     # 3. 热门场次降级处理
     if hot_level == "High":
-        final_confidence_val *= 0.85 # 热门比赛信心自动下调 15%
+        final_confidence_val *= 0.85
         
     # 4. 推荐决策
     recommendation = "平"
     if h2h_probs["home"] > 50: recommendation = "胜"
     elif h2h_probs["away"] > 50: recommendation = "负"
     
-    # 5. 让球逻辑保护 (优先参考竞彩官方盘口)
-    # 逻辑：如果获取到官方让球盘口，则使用官方盘口；否则根据主客实力差预测盘口
-    official_handicap = raw_data.get('official_handicap', 0)
-    
-    if official_handicap != 0:
-        handicap_val = official_handicap
-        handicap_source = "官方"
+    # 5. 让球逻辑保护
+    if h2h_probs["home"] > h2h_probs["away"] + 5:
+        handicap_val = -1
+    elif h2h_probs["away"] > h2h_probs["home"] + 5:
+        handicap_val = 1
     else:
-        # 如果没有官方盘口，则根据赔率/实力预测
-        # 在竞彩中，主队较强通常是 主-1，主队较弱通常是 主+1
-        # 修正：判断谁是让球方
-        if h2h_probs["home"] > h2h_probs["away"] + 5: # 主队明显占优
-            handicap_val = -1
-        elif h2h_probs["away"] > h2h_probs["home"] + 5: # 客队明显占优
-            handicap_val = 1
-        else:
-            # 实力接近时，通常主队会让球（主场优势），设为 -1
-            handicap_val = -1
-        handicap_source = "预测"
+        handicap_val = -1
     
     final_rec = recommendation
     
-    # 只有在需要让球保护时（热门或信心一般）才切换到让球选项
     if hot_level == "High" or final_confidence_val < 0.7:
         if handicap_val < 0:
-            # 主让球逻辑 (例如 -1, -2)
             if recommendation == "胜":
-                # 实力强但信心一般，选让平或让负进行风险规避
                 final_rec = "让平" if final_confidence_val > 0.6 else "让负"
             else:
                 final_rec = "让负"
         else:
-            # 主受让逻辑 (例如 +1, +2)
             if recommendation == "负":
-                # 实力弱但信心一般，选让平或让胜进行风险规避
                 final_rec = "让平" if final_confidence_val > 0.6 else "让胜"
             else:
                 final_rec = "让胜"
@@ -473,7 +320,7 @@ def analyze(match_id, injury_info=None, trend_info=None):
             "home_team": raw_data.get('home_team'),
             "away_team": raw_data.get('away_team'),
             "hot_level": hot_level,
-            "official_handicap": f"主{handicap_val:+} ({handicap_source})"
+            "handicap": f"主{handicap_val:+}"
         },
         "intelligence": {
             "injury_status": injury_info or "未知 (建议联网确认)",
@@ -482,7 +329,7 @@ def analyze(match_id, injury_info=None, trend_info=None):
         "recommendation": {
             "result": final_rec,
             "confidence": f"{round(final_confidence_val * 100)}%",
-            "note": f"基于{handicap_source}盘口 {handicap_val:+} 给出的最优选项。{ '主让球' if handicap_val < 0 else '主受让' }"
+            "note": f"{'主让球' if handicap_val < 0 else '主受让'}"
         }
     }
     
